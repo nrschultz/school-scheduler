@@ -14,7 +14,7 @@ def generateTeacher(id, courses):
     }
 
 def generateInputData(options={}):
-    periods = range(1, options.get("num_periods", 4) + 1)
+    periods = range(1, options.get("num_periods", 5) + 1)
     courses = {
         "electives": options.get("electiveCourses", ["Spanish1", "French1", "Art", "Band", "Shop", "PhysEd"]),
         "required": options.get("requiredCourses", ["English1", "Science1", "Math1", "History1"])

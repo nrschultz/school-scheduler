@@ -14,23 +14,24 @@ def defineModel(problemName, data):
 
     studentEnrollment = LpVariable.dicts("studentEnrollment", (data["periods"], ALL_COURSES, data["rooms"], sids), cat="Binary")
     teacherAssignment = LpVariable.dicts("teacherAssignment", (data["periods"], ALL_COURSES, data["rooms"], tids), cat="Binary")
-    # roomAssignment = LpVariable.dicts("roomAssignment", (data["periods"], data["courses"], data["rooms"]), cat="Binary")
 
     print("Generated Variables")
 
     # Objective - minimize # of teacher assingments across all course-room-periods
-    # prob += lpSum([teacherAssignment[p][c][r][tid] for p in data["periods"] for c in data["courses"] for r in data["rooms"] for tid in tids])
+    prob += lpSum([teacherAssignment[p][c][r][tid] for p in data["periods"] for c in ALL_COURSES for r in data["rooms"] for tid in tids])
 
 
     # class size
     for p in data["periods"]:
-        for c in ALL_COURSES:
-            for r in data["rooms"]:
+        for r in data["rooms"]:
+            # rooms can only have one course-period
+            prob += lpSum([teacherAssignment[p][c][r][tid] for c in ALL_COURSES for tid in tids]) <= 1
+
+            for c in ALL_COURSES:
                 # less than class size max
                 prob += lpSum([studentEnrollment[p][c][r][sid] for sid in sids]) <= 15 
-                # add a minimum class size (not working? or maybe the randomized data is hit or miss)
+                # add a minimum class size (not working?)
                 # prob += 2 - lpSum([studentEnrollment[p][c][r][sid] for sid in sids]) <= lpSum([studentEnrollment[p][c][r][sid] for sid in sids]) * SMALL_M
-
                 # no more than one teacher
                 prob += lpSum([teacherAssignment[p][c][r][tid] for tid in tids]) <= 1
                 # must have teacher if students enrolled
@@ -38,15 +39,7 @@ def defineModel(problemName, data):
                 # must have students if teacher assigned
                 prob += lpSum([teacherAssignment[p][c][r][tid] for tid in tids]) <= lpSum([studentEnrollment[p][c][r][sid] for sid in sids]) * M
 
-                # prob += lpSum([studentEnrollment[p][c][r][sid] for sid in sids]) >= 15 
-                # prob += lpSum([teacherAssignment[p][c][r][sid] for tid in tids]) == 1
-    
-    #students have 1 course-room per period
-    for sid in sids:
-        for p in data["periods"]:
-            prob += lpSum([studentEnrollment[p][c][r][sid] for c in ALL_COURSES for r in data["rooms"]]) == 1
-    
-    #students have 1 of any given course
+    #students have 1 of any given course, must have required courses, and other courses come from their electives
     for sid in sids:
         for c in ALL_COURSES:
             # lookup if course in required, if it is, set = 1, if it is in elective, set <= 1, if in neither, set = 0
@@ -57,24 +50,26 @@ def defineModel(problemName, data):
                 prob += lpSum([studentEnrollment[p][c][r][sid] for r in data["rooms"] for p in data["periods"] ]) <= 1
             else:
                 prob += lpSum([studentEnrollment[p][c][r][sid] for r in data["rooms"] for p in data["periods"] ]) == 0
+           
+        #students have 1 course-room per period
+        for p in data["periods"]:
+            prob += lpSum([studentEnrollment[p][c][r][sid] for c in ALL_COURSES for r in data["rooms"]]) == 1
 
     #teachers have at most 1 course-room per period
     for tid in tids:
         for p in data["periods"]:
             prob += lpSum([teacherAssignment[p][c][r][tid] for c in ALL_COURSES for r in data["rooms"]]) <= 1
+        for c in ALL_COURSES:
+            # teachers can only teach courses that are in their "qualified courses" list
+            status = courseStatusForTeacher(data["teachers"][tid], c)
+            if status == "unqualified":
+                prob += lpSum([teacherAssignment[p][c][r][tid] for r in data["rooms"] for p in data["periods"] ]) == 0
 
-    # rooms can only have one course-period
-    for r in data["rooms"]:
-        for p in data["periods"]:
-            prob += lpSum([teacherAssignment[p][c][r][tid] for c in ALL_COURSES for tid in tids]) <= 1
-
+    # some courses (physEd, shop, etc) can only be taught in specific rooms, and the inverse is required as well (only physEd can be taught in the gym, only the gym can be used for physEd)
     reserveRooms(prob, data, {"studentEnrollment": studentEnrollment, "teacherAssignment": teacherAssignment})
 
-    # Future Idesa
-    # one room per teacher or one teacher per room
-    # one course per room
-    # Subject to generalize course, a teacher will probably teach a subject but multiple courses
-    # 
+    # Future Ideas
+    # try to ensure that teachers don't need to move between rooms
 
     return prob
 
@@ -93,3 +88,10 @@ def courseStatusForStudent(student, course):
         return "elective"
     else:
         return "no_enrollment"
+
+
+def courseStatusForTeacher(teacher, course):
+    if course in teacher["qualifiedCourses"]:
+        return "qualified"
+    else:
+        return "unqualified"

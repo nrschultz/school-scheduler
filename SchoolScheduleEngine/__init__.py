@@ -1,7 +1,10 @@
 from pulp import *
+import pprint 
 import input_data  
 import output
 import model
+
+PP = pprint.PrettyPrinter()
 
 def main():
     problemName = "SchoolScheduleProblem"
@@ -25,9 +28,13 @@ def main():
         return
 
     df = output.processData(prob)
-    # output.printStudentSchedules(df)
-    # output.printTeacherSchedules(df)
-    output.printRoomSchedules(df)
+    violations = output.verifySchedule(data, df)
+    if len(violations) > 0:
+        PP.pprint(violations)
+    else:
+        # output.printStudentSchedules(df)
+        # output.printTeacherSchedules(df)
+        output.printRoomSchedules(df)
     
 
 
